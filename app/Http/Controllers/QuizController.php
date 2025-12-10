@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Services\QuizService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 
 class QuizController extends Controller
@@ -35,9 +36,7 @@ class QuizController extends Controller
 
     public function start(Request $request, QuizService $service)
     {
-        if (Auth::user()->role !== UserRole::Admin) {
-            abort(403);
-        }
+        Gate::authorize('manage-game');
 
         $request->validate(['text' => 'required|string|min:3']);
         $service->startNewQuestion($request->text);
@@ -47,6 +46,8 @@ class QuizController extends Controller
 
     public function buzz(QuizService $service)
     {
+        Gate::authorize('play-game');
+
         $service->buzz(Auth::user());
 
         return back();
@@ -54,6 +55,8 @@ class QuizController extends Controller
 
     public function answer(Request $request, QuizService $service)
     {
+        Gate::authorize('play-game');
+
         $request->validate(['answer' => 'required|string|max:255']);
 
         $service->answer(Auth::user(), $request->answer);
@@ -63,9 +66,7 @@ class QuizController extends Controller
 
     public function validate(Request $request, QuizService $service)
     {
-        if (Auth::user()->role !== UserRole::Admin) {
-            abort(403);
-        }
+        Gate::authorize('manage-game');
 
         $request->validate(['correct' => 'required|boolean']);
 
@@ -76,9 +77,8 @@ class QuizController extends Controller
 
     public function reset(QuizService $service)
     {
-        if (Auth::user()->role !== UserRole::Admin) {
-            abort(403);
-        }
+        Gate::authorize('manage-game');
+
         $service->resetGame();
 
         return back();
@@ -86,9 +86,8 @@ class QuizController extends Controller
 
     public function timeout(QuizService $service)
     {
-        if (Auth::user()->role !== UserRole::Admin) {
-            abort(403);
-        }
+        Gate::authorize('manage-game');
+
         $service->checkAndCloseIfExpired();
 
         return back();
