@@ -12,12 +12,14 @@ class QuestionUpdated implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
+    public array $gameData;
+
     /**
      * Create a new event instance.
      */
-    public function __construct()
+    public function __construct(array $gameData)
     {
-        //
+        $this->gameData = $gameData;
     }
 
     /**
@@ -38,5 +40,10 @@ class QuestionUpdated implements ShouldBroadcastNow
     public function broadcastAs(): string
     {
         return 'game.updated';
+    }
+
+    public function broadcastWith(): array
+    {
+        return $this->gameData;
     }
 }

@@ -17,6 +17,25 @@ class QuizService
         return Question::whereNot('status', QuestionStatus::Closed)->first();
     }
 
+    private function broadcastGameState(): void
+    {
+        $question = $this->getCurrentQuestion();
+        if ($question) {
+            $question->load('buzzedUser');
+        }
+
+        $players = User::where('role', UserRole::Player)->orderByDesc('score')->get();
+        $winner = User::where('score', '>=', 5)->first();
+
+        $gameData = [
+            'question' => $question,
+            'players' => $players,
+            'game_winner' => $winner,
+        ];
+
+        QuestionUpdated::dispatch($gameData);
+    }
+
     public function startNewQuestion(string $text): void
     {
         // Transaction per garantire che tutte le operazioni siano svolte correttamente
@@ -32,7 +51,7 @@ class QuizService
             ]);
         });
 
-        QuestionUpdated::dispatch();
+        $this->broadcastGameState();
     }
 
     // Resetta il gioco -> azzera punteggi e chiude domande attive
@@ -43,7 +62,7 @@ class QuizService
             Question::whereIn('status', [QuestionStatus::Active, QuestionStatus::Buzzed])->update(['status' => QuestionStatus::Closed]);
         });
 
-        QuestionUpdated::dispatch();
+        $this->broadcastGameState();
     }
 
     // un player preme il buzzer
@@ -74,10 +93,11 @@ class QuizService
                 'answer' => null,
             ]);
 
-            QuestionUpdated::dispatch();
+            $this->broadcastGameState();
         });
     }
 
+    // gestione risposta data dal giocatore
     public function answer(User $user, string $text): void
     {
         $question = $this->getCurrentQuestion();
@@ -92,9 +112,10 @@ class QuizService
             'timer_ends_at' => null,
         ]);
 
-        QuestionUpdated::dispatch();
+        $this->broadcastGameState();
     }
 
+    // gestione validazione della risposta dall'admin
     public function handleAnswer(bool $isCorrect): void
     {
         $question = $this->getCurrentQuestion();
@@ -126,10 +147,12 @@ class QuizService
                     'timer_ends_at' => now()->addSeconds(10),
                     'answer' => null,
                 ]);
+
+                $this->closeIfAllBanned();
             });
         }
 
-        QuestionUpdated::dispatch();
+        $this->broadcastGameState();
     }
 
     public function checkAndCloseIfExpired(): void
@@ -150,15 +173,23 @@ class QuizService
                 $buzzedUser->update(['banned' => true]);
                 $question->update(['buzzed_user_id' => null, 'answer' => null, 'status' => QuestionStatus::Active, 'timer_ends_at' => now()->addSeconds(10)]);
 
-                if (User::where('role', UserRole::Player)->where('banned', false)->count() === 0) {
-                    $question->update(['status' => QuestionStatus::Closed]);
-                }
+                $this->closeIfAllBanned();
             } else {
                 // nessuno ha premuto il buzzer -> chiudi la domanda senza vincitore
                 $question->update(['status' => QuestionStatus::Closed]);
             }
 
-            QuestionUpdated::dispatch();
+            $this->broadcastGameState();
+        }
+    }
+
+    private function closeIfAllBanned(): void
+    {
+        $question = $this->getCurrentQuestion();
+        $allBanned = User::where('role', UserRole::Player)->where('banned', false)->count() === 0;
+
+        if ($allBanned) {
+            $question->update(['status' => QuestionStatus::Closed]);
         }
     }
 }
