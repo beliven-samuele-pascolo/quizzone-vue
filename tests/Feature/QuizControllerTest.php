@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\QuestionStatus;
 use App\Enums\UserRole;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -13,7 +14,7 @@ beforeEach(function () {
 });
 
 // test se l'admin riceve i props corretti
-test('index renders the correct component and props for admin', function () {
+test('index renders the correct component and props', function () {
     $admin = User::factory()->create(['role' => UserRole::Admin]);
 
     $this->actingAs($admin)
@@ -34,5 +35,30 @@ test('index renders correct props for player', function () {
         ->get(route('quiz.index'))
         ->assertInertia(fn (Assert $page) => $page
             ->component('QuizRoom')
+            ->has('players')
+            ->has('question')
         );
+});
+
+test('admin can start a new question', function () {
+    $admin = User::factory()->create(['role' => UserRole::Admin]);
+
+    $this->actingAs($admin)
+        ->post(route('quiz.start'), ['text' => 'Test nuova domanda'])
+        ->assertRedirect();
+
+    $this->assertDatabaseHas('questions', [
+        'body' => 'Test nuova domanda',
+        'status' => QuestionStatus::Active,
+    ]);
+});
+
+test('player can not start a new question', function () {
+    $player = User::factory()->create(['role' => UserRole::Player]);
+
+    $this->actingAs($player)
+        ->post(route('quiz.start'), ['text' => 'Test nuova domanda'])
+        ->assertForbidden();
+
+    $this->assertDatabaseMissing('questions', ['body' => 'Test nuova domanda']);
 });
