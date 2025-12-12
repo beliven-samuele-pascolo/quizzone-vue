@@ -57,4 +57,9 @@ class User extends Authenticatable
     {
         return $this->role === UserRole::Admin;
     }
+
+    public function winnerQuestions()
+    {
+        return $this->hasMany(Question::class, 'winner_user_id');
+    }
 }
